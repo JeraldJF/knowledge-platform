@@ -467,7 +467,9 @@ object UpdateHierarchyManager {
         val req = new Request(request)
         req.getContext.put(HierarchyConstants.IDENTIFIER, rootId)
         val metadata = cleanUpRootData(node)
+        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: metadata after cleanUpRootData contains dialcodes: " + metadata.containsKey(HierarchyConstants.DIALCODES) + " :: value: " + metadata.get(HierarchyConstants.DIALCODES))
         req.getRequest.putAll(metadata)
+        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: request contains dialcodes: " + req.getRequest.containsKey(HierarchyConstants.DIALCODES) + " :: value: " + req.getRequest.get(HierarchyConstants.DIALCODES))
         req.put(HierarchyConstants.HIERARCHY, ScalaJsonUtils.serialize(updatedHierarchy))
         req.put(HierarchyConstants.RELATIONAL_METADATA_COL, ScalaJsonUtils.serialize(reqHierarchy))
         req.put(HierarchyConstants.IDENTIFIER, rootId)
@@ -479,7 +481,14 @@ object UpdateHierarchyManager {
     private def cleanUpRootData(node: Node)(implicit oec: OntologyEngineContext, ec: ExecutionContext): java.util.Map[String, AnyRef] = {
         // Preserve dialcodes before cleanup
         val dialcodes = node.getMetadata.get(HierarchyConstants.DIALCODES)
-        TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: dialcodes before cleanup: " + dialcodes)
+        val dialcodesStr = if (dialcodes != null) {
+            dialcodes match {
+                case arr: Array[_] => java.util.Arrays.toString(arr.asInstanceOf[Array[Object]])
+                case list: java.util.List[_] => list.toString
+                case _ => dialcodes.toString
+            }
+        } else "null"
+        TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: dialcodes before cleanup: " + dialcodesStr)
         
         val restrictedProps = DefinitionNode.getRestrictedProperties(HierarchyConstants.TAXONOMY_ID, HierarchyConstants.SCHEMA_VERSION, HierarchyConstants.OPERATION_UPDATE_HIERARCHY, HierarchyConstants.COLLECTION_SCHEMA_NAME)
         TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: restrictedProps: " + restrictedProps)
@@ -491,7 +500,7 @@ object UpdateHierarchyManager {
         // Restore dialcodes if it was present
         if (dialcodes != null) {
             node.getMetadata.put(HierarchyConstants.DIALCODES, dialcodes)
-            TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: dialcodes restored: " + dialcodes)
+            TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: dialcodes restored: " + dialcodesStr)
         }
         
         node.getMetadata
