@@ -477,11 +477,23 @@ object UpdateHierarchyManager {
     }
 
     private def cleanUpRootData(node: Node)(implicit oec: OntologyEngineContext, ec: ExecutionContext): java.util.Map[String, AnyRef] = {
-        DefinitionNode.getRestrictedProperties(HierarchyConstants.TAXONOMY_ID, HierarchyConstants.SCHEMA_VERSION, HierarchyConstants.OPERATION_UPDATE_HIERARCHY, HierarchyConstants.COLLECTION_SCHEMA_NAME)
-          .foreach(key => node.getMetadata.remove(key))
+        // Preserve dialcodes before cleanup
+        val dialcodes = node.getMetadata.get(HierarchyConstants.DIALCODES)
+        TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: dialcodes before cleanup: " + dialcodes)
+        
+        val restrictedProps = DefinitionNode.getRestrictedProperties(HierarchyConstants.TAXONOMY_ID, HierarchyConstants.SCHEMA_VERSION, HierarchyConstants.OPERATION_UPDATE_HIERARCHY, HierarchyConstants.COLLECTION_SCHEMA_NAME)
+        TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: restrictedProps: " + restrictedProps)
+        restrictedProps.foreach(key => node.getMetadata.remove(key))
         node.getMetadata.remove(HierarchyConstants.STATUS)
         node.getMetadata.remove(HierarchyConstants.LAST_UPDATED_ON)
         node.getMetadata.remove(HierarchyConstants.LAST_STATUS_CHANGED_ON)
+        
+        // Restore dialcodes if it was present
+        if (dialcodes != null) {
+            node.getMetadata.put(HierarchyConstants.DIALCODES, dialcodes)
+            TelemetryManager.info("cleanUpRootData:: Node ID: " + node.getIdentifier + " :: dialcodes restored: " + dialcodes)
+        }
+        
         node.getMetadata
     }
 
