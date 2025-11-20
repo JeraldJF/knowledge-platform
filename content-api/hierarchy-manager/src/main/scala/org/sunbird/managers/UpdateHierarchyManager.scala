@@ -461,30 +461,50 @@ object UpdateHierarchyManager {
         })
 
         val node = getTempNode(nodeList, rootId)
+        
+        // CRITICAL: Preserve dialcodes from Neo4j BEFORE any metadata operations
+        // This must happen before cleanUpRootData() because node metadata might have been
+        // overwritten by updateRootNode() if root was in nodesModified
+        val dialcodesFromNeo4j = node.getMetadata.get(HierarchyConstants.DIALCODES)
+        val dialcodesStr = if (dialcodesFromNeo4j != null) {
+            dialcodesFromNeo4j match {
+                case arr: Array[_] => java.util.Arrays.toString(arr.asInstanceOf[Array[Object]])
+                case list: java.util.List[_] => list.toString
+                case _ => dialcodesFromNeo4j.toString
+            }
+        } else "null"
+        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: dialcodes from Neo4j (before cleanup): " + dialcodesStr)
+        
         val updatedHierarchy = new java.util.HashMap[String, AnyRef]()
         updatedHierarchy.put(HierarchyConstants.IDENTIFIER, rootId)
         updatedHierarchy.put(HierarchyConstants.CHILDREN, children)
         val req = new Request(request)
         req.getContext.put(HierarchyConstants.IDENTIFIER, rootId)
         val metadata = cleanUpRootData(node)
-        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: metadata after cleanUpRootData contains dialcodes: " + metadata.containsKey(HierarchyConstants.DIALCODES) + " :: value: " + metadata.get(HierarchyConstants.DIALCODES))
+        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: metadata after cleanUpRootData contains dialcodes: " + metadata.containsKey(HierarchyConstants.DIALCODES))
         
-        // Preserve dialcodes - add to removeProps list so it won't be nullified by validation
-        val preservedDialcodes = metadata.get(HierarchyConstants.DIALCODES)
-        if (preservedDialcodes != null) {
-            val removeProps = new java.util.ArrayList[String]()
-            removeProps.add(HierarchyConstants.DIALCODES)
-            req.getContext.put("removeProps", removeProps)
-        }
+        // Remove dialcodes from request - we'll restore the original Neo4j value later
+        metadata.remove(HierarchyConstants.DIALCODES)
+        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: dialcodes removed from request metadata")
         
         req.getRequest.putAll(metadata)
-        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: request contains dialcodes: " + req.getRequest.containsKey(HierarchyConstants.DIALCODES) + " :: value: " + req.getRequest.get(HierarchyConstants.DIALCODES))
+        TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: request contains dialcodes: " + req.getRequest.containsKey(HierarchyConstants.DIALCODES))
         req.put(HierarchyConstants.HIERARCHY, ScalaJsonUtils.serialize(updatedHierarchy))
         req.put(HierarchyConstants.RELATIONAL_METADATA_COL, ScalaJsonUtils.serialize(reqHierarchy))
         req.put(HierarchyConstants.IDENTIFIER, rootId)
         req.put(HierarchyConstants.CHILDREN, new java.util.ArrayList())
         req.put(HierarchyConstants.CONCEPTS, new java.util.ArrayList())
-        DataNode.update(req)
+        
+        // Use dataModifier to restore dialcodes from Neo4j after validation
+        val dataModifier = (node: Node) => {
+            if (dialcodesFromNeo4j != null) {
+                node.getMetadata.put(HierarchyConstants.DIALCODES, dialcodesFromNeo4j)
+                TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: dialcodes from Neo4j restored after validation: " + dialcodesStr)
+            }
+            node
+        }
+        
+        DataNode.update(req, dataModifier)
     }
 
     private def cleanUpRootData(node: Node)(implicit oec: OntologyEngineContext, ec: ExecutionContext): java.util.Map[String, AnyRef] = {
