@@ -207,7 +207,7 @@ object UpdateHierarchyManager {
         val futures = nodesModified.filter(nodeModified => !StringUtils.startsWith(request.getContext.get(HierarchyConstants.ROOT_ID).asInstanceOf[String], nodeModified._1))
                 .map(nodeModified => {
                     val metadata = nodeModified._2.asInstanceOf[java.util.HashMap[String, AnyRef]].getOrDefault(HierarchyConstants.METADATA, new java.util.HashMap()).asInstanceOf[java.util.HashMap[String, AnyRef]]
-                    metadata.remove(HierarchyConstants.DIALCODES)
+                    // metadata.remove(HierarchyConstants.DIALCODES)
                     metadata.put(HierarchyConstants.STATUS, "Draft")
                     metadata.put(HierarchyConstants.LAST_UPDATED_ON, DateUtils.formatCurrentDate)
                     if (nodeModified._2.asInstanceOf[java.util.HashMap[String, AnyRef]].containsKey(HierarchyConstants.IS_NEW)
@@ -497,8 +497,23 @@ object UpdateHierarchyManager {
         
         // Use dataModifier to restore dialcodes from Neo4j after validation
         val dataModifier = (node: Node) => {
+            TelemetryManager.info("updateHierarchyData:: dataModifier CALLED for Node ID: " + rootId)
+            TelemetryManager.info("updateHierarchyData:: dataModifier:: Node metadata BEFORE restoration contains dialcodes: " + node.getMetadata.containsKey(HierarchyConstants.DIALCODES))
+            TelemetryManager.info("updateHierarchyData:: dataModifier:: dialcodesFromNeo4j is null: " + (dialcodesFromNeo4j == null))
+            
             if (dialcodesFromNeo4j != null) {
                 node.getMetadata.put(HierarchyConstants.DIALCODES, dialcodesFromNeo4j)
+                TelemetryManager.info("updateHierarchyData:: dataModifier:: dialcodes PUT into node metadata")
+                TelemetryManager.info("updateHierarchyData:: dataModifier:: Node metadata AFTER restoration contains dialcodes: " + node.getMetadata.containsKey(HierarchyConstants.DIALCODES))
+                val dialcodesAfterPut = node.getMetadata.get(HierarchyConstants.DIALCODES)
+                val dialcodesAfterStr = if (dialcodesAfterPut != null) {
+                    dialcodesAfterPut match {
+                        case arr: Array[_] => java.util.Arrays.toString(arr.asInstanceOf[Array[Object]])
+                        case list: java.util.List[_] => list.toString
+                        case _ => dialcodesAfterPut.toString
+                    }
+                } else "null"
+                TelemetryManager.info("updateHierarchyData:: dataModifier:: dialcodes value after PUT: " + dialcodesAfterStr)
                 TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: dialcodes from Neo4j restored after validation: " + dialcodesStr)
             }
             node
