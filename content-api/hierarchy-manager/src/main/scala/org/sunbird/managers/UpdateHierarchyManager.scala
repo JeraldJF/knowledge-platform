@@ -468,6 +468,15 @@ object UpdateHierarchyManager {
         req.getContext.put(HierarchyConstants.IDENTIFIER, rootId)
         val metadata = cleanUpRootData(node)
         TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: metadata after cleanUpRootData contains dialcodes: " + metadata.containsKey(HierarchyConstants.DIALCODES) + " :: value: " + metadata.get(HierarchyConstants.DIALCODES))
+        
+        // Preserve dialcodes - add to removeProps list so it won't be nullified by validation
+        val preservedDialcodes = metadata.get(HierarchyConstants.DIALCODES)
+        if (preservedDialcodes != null) {
+            val removeProps = new java.util.ArrayList[String]()
+            removeProps.add(HierarchyConstants.DIALCODES)
+            req.getContext.put("removeProps", removeProps)
+        }
+        
         req.getRequest.putAll(metadata)
         TelemetryManager.info("updateHierarchyData:: Node ID: " + rootId + " :: request contains dialcodes: " + req.getRequest.containsKey(HierarchyConstants.DIALCODES) + " :: value: " + req.getRequest.get(HierarchyConstants.DIALCODES))
         req.put(HierarchyConstants.HIERARCHY, ScalaJsonUtils.serialize(updatedHierarchy))
